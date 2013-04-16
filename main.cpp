@@ -1,8 +1,10 @@
 #include <stdio.h>
- 
+#include <cstdlib>
+
 #include <string>
 #include <map>
- 
+#include <set>
+
 using namespace std;
 
 bool isnumber(const string& str)
@@ -24,9 +26,9 @@ bool isnumber(const string& str)
 class CIndex;
 class CCell;
 
-typedef map<CIndex, CCell> CSheet;
- 
-class CIndex 
+typedef map<CIndex, CCell*> CSheet;
+
+class CIndex
 {
 public:
 	int x, y;
@@ -44,8 +46,8 @@ public:
 		return (x != idx.x) || (y != idx.y);
 	}
 };
- 
-class CCell 
+
+class CCell
 {
 protected:
 	CSheet& sheet;
@@ -53,18 +55,21 @@ protected:
 	string text, disptext;
 	bool bCalculated;
 public:
-	CCell(const CSheet& sheet, const CIndex& tag, const string& text): 
+	CCell(CSheet& sheet, const CIndex& tag, const string& text):
 		sheet(sheet), tag(tag), text(text), bCalculated(false)
 	{
 	}
-	CCell(CCell&& cell): tag(std::move(tag)), text(std::move(text))
+	CCell(CCell&& cell): sheet(sheet), tag(move(tag)), text(move(text))
 	{
 	}
-	string get_text() const 
+	string get_text() const
 	{
 		return disptext;
 	}
 	virtual void calculate()
+	{
+	}
+	virtual void calculate(set<CIndex>& refs)
 	{
 	}
 	CCell* replace_with(CCell* cell)
@@ -78,7 +83,7 @@ public:
 class CCellError: public CCell
 {
 public:
-	CCellError(CCell&& cell, const string& msg): CCell(cell)
+	CCellError(CCell&& cell, const string& msg): CCell(move(cell))
 	{
 		disptext = msg;
 		bCalculated = true;
@@ -88,11 +93,11 @@ public:
 class CCellEmpty: public CCell
 {
 public:
-	CCellEmpty(CCell&& cell): CCell(cell)
+	CCellEmpty(CCell&& cell): CCell(move(cell))
 	{
 		if (text.length() != 0)
 		{
-			replace_with(new CCellError(std::move(*this), "#NOTEMPTY");
+			replace_with(new CCellError(move(*this), "#NOTEMPTY"));
 			return;
 		}
 		bCalculated = true;
@@ -102,11 +107,11 @@ public:
 class CCellString: public CCell
 {
 public:
-	CCellString(CCell&& cell): CCell(cell)
+	CCellString(CCell&& cell): CCell(move(cell))
 	{
 		if (text.length() < 1 || text[0] != '\'')
 		{
-			replace_with(new CCellError(std::move(*this), "#INTERNAL");
+			replace_with(new CCellError(move(*this), "#INTERNAL"));
 			return;
 		}
 		disptext = text.substr(1);
@@ -118,11 +123,11 @@ class CCellNumber: public CCell
 {
 public:
 	int value;
-	CCellNumber(CCell&& cell): CCell(cell)
+	CCellNumber(CCell&& cell): CCell(move(cell))
 	{
 		if (!isnumber(text))
 		{
-			replace_with(new CCellError(std::move(*this), "#NOTANUMBER");
+			replace_with(new CCellError(move(*this), "#NOTANUMBER"));
 			return;
 		}
 		disptext = text;
@@ -134,33 +139,30 @@ public:
 class CCellFormula: public CCell
 {
 public:
-	CCellFormula(CCell&& cell): CCell(cell)
+	CCellFormula(CCell&& cell, set<CIndex>& refs): CCell(move(cell))
 	{
 		if (text.length() < 1 || text[0] != '=')
 		{
-			replace_with(new CCellError(std::move(*this), "#NOTEQUATION");
+			replace_with(new CCellError(move(*this), "#NOTEQUATION"));
 			return;
 		}
+		calculate(refs);
+		bCalculated = true;
 	}
 	void calculate(set<CIndex>& refs)
 	{
-		if (refs.find(CIndex) != refs.end())
+		if (refs.find(tag) != refs.end())
 		{
-			replace_with(new CCellError(std::move(*this), "RECURSIVELINKS"));
+			replace_with(new CCellError(move(*this), "#RECURSIVELINKS"));
 			return;
 		}
 		refs.insert(tag);
-		
+
 		// calculate the equation
 		// ...
 		//
-		
-		bCalculated = true;		
-	}
-	void calculate()
-	{
-		if (!bCalculated)
-			calculate(set<CIndex>());
+
+		bCalculated = true;
 	}
 };
 
@@ -177,18 +179,22 @@ class CCellUndefined: public CCell
 			return false;
 		}
 	}
-	void calculate()
+	void calculate(set<CIndex>& refs)
 	{
 		if (!(
 			try_replace(new CCellEmpty(*this)) ||
 			try_replace(new CCellString(*this)) ||
 			try_replace(new CCellNumber(*this)) ||
-			try_replace(new CCellFormula(*this))
+			try_replace(new CCellFormula(*this, refs))
 			) )
 		{
-			replace_with(new CCellError(std::move(*this), "#NOPATTERN");
+			replace_with(new CCellError(move(*this), "#NOPATTERN"));
 			return;
 		}
+	}
+	void calculate()
+	{
+	    calculate(set<CIndex>());
 	}
 };
 
