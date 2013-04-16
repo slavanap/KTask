@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <cstdlib>
+#include <iostream>
 
 #include <string>
 #include <map>
@@ -240,5 +241,63 @@ int main(int argc, char* argv[])
 {
 	CSheet sheet;
 
+    int n,m;
+    string str;
+
+    //cin >> n >> m;
+    //cin.get(); // for '\n' in first line
+
+    // read n and m
+    if (!getline(cin, str))
+        return 0;
+    int found = str.find_first_of("\t");
+    if (found == string::npos)
+        return 0;
+
+    string nstr = str.substr(0, found);
+    string mstr = str.substr(found + 1);
+    if (isnumber(nstr) && isnumber(mstr))
+    {
+        n = atoi(nstr.c_str());
+        m = atoi(mstr.c_str());
+    } else {
+        return 0;
+    }
+
+    for (int i = 0; i < n; ++i)
+    {
+        if (!getline(cin, str))
+        {
+            for (int j = 0; j < m; ++j)
+            {
+                // create and add CCellError
+                // ...
+                //
+            }
+            continue;
+        }
+        int bfound = 0;
+        int efound = str.find_first_of("\t");
+        for (int j = 0; j < m-1; ++j)
+        {
+            if (efound == string::npos)
+            {
+                // create and add CCellError
+                // ...
+                //
+                continue;
+            }
+            string subtext = str.substr(bfound, efound - bfound);
+            // create and add CCellUndefined
+            // ...
+            //
+            bfound = efound + 1;
+            efound = str.find_first_of("\t", bfound);
+        }
+        string subtext = str.substr(bfound);
+        // create and add CCellUndefined
+        // ...
+        //
+    }
 	return 0;
 }
