@@ -33,15 +33,15 @@ class CIndex
 public:
 	int x, y;
 	CIndex(int x, int y): x(x), y(y) {}
-	bool operator<(const CIndex& idx)
+	bool operator<(const CIndex& idx) const
 	{
 		return (x < idx.x) || (x == idx.x && y < idx.y);
 	}
-	bool operator==(const CIndex& idx)
+	bool operator==(const CIndex& idx) const
 	{
 		return (x == idx.x) && (y == idx.y);
 	}
-	bool operator!=(const CIndex& idx)
+	bool operator!=(const CIndex& idx) const
 	{
 		return (x != idx.x) || (y != idx.y);
 	}
@@ -161,6 +161,43 @@ public:
 		// calculate the equation
 		// ...
 		//
+        string subtext = text.substr(1);
+        int fpos;
+        if ((fpos = subtext.find_first_of("+-*/")) == string::npos)
+        {
+            if (isalpha(subtext[0]))
+            {
+                int x, y;
+                if (isnumber(subtext.substr(1)))
+                {
+                    if (subtext[0] >= 'A' && subtext[0] <= 'Z')
+                    {
+                        x = subtext[0] - 'A' + 1;
+                    } else {
+                        x = subtext[0] - 'a' + 1;
+                    }
+                    y = atoi(text.c_str());
+                } else {
+                    replace_with(new CCellError(move(*this), "#BADLINK"));
+                    return;
+                }
+                sheet[CIndex(x,y)] -> calculate(refs);
+                replace_with(sheet[CIndex(x,y)]);
+                return;
+            } else if (isnumber(subtext)) {
+                // create CCellNumber and replace
+                // ...
+                //
+            }
+        } else {
+            int bpos = 0;
+            do
+            {
+                string term = subtext.substr(bpos, fpos - bpos);
+                //
+                bpos = fpos + 1;
+            } while((fpos = subtext.find_first_of("+-*/", bpos)) != string::npos);
+        }
 
 		bCalculated = true;
 	}
@@ -182,10 +219,10 @@ class CCellUndefined: public CCell
 	void calculate(set<CIndex>& refs)
 	{
 		if (!(
-			try_replace(new CCellEmpty(*this)) ||
-			try_replace(new CCellString(*this)) ||
-			try_replace(new CCellNumber(*this)) ||
-			try_replace(new CCellFormula(*this, refs))
+			try_replace(new CCellEmpty(move(*this))) ||
+			try_replace(new CCellString(move(*this))) ||
+			try_replace(new CCellNumber(move(*this))) ||
+			try_replace(new CCellFormula(move(*this), refs))
 			) )
 		{
 			replace_with(new CCellError(move(*this), "#NOPATTERN"));
@@ -194,7 +231,8 @@ class CCellUndefined: public CCell
 	}
 	void calculate()
 	{
-	    calculate(set<CIndex>());
+	    set<CIndex> emptySet;
+	    calculate(emptySet);
 	}
 };
 
