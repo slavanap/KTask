@@ -13,8 +13,8 @@ bool isnumber(const string& str)
 	if (str.length() == 0)
 		return false;
 	string::const_iterator it = str.begin();
-	if ((*it == '+' || *it == '-') && str.length() > 1)
-		++it;
+	//if ((*it == '+' || *it == '-') && str.length() > 1)
+	//	++it;
 	while(it != str.end())
 	{
 		if (!isdigit(*it))
@@ -34,6 +34,16 @@ class CIndex
 public:
 	int x, y;
 	CIndex(int x, int y): x(x), y(y) {}
+	CIndex(string& str)
+	{
+        if (str[0] >= 'A' && str[0] <= 'Z')
+        {
+            x = str[0] - 'A';
+        } else {
+            x = str[0] - 'a';
+        }
+        y = atoi(str.substr(1).c_str());
+	}
 	bool operator<(const CIndex& idx) const
 	{
 		return (x < idx.x) || (x == idx.x && y < idx.y);
@@ -57,22 +67,14 @@ protected:
 	bool bCalculated;
 public:
 	CCell(CSheet& sheet, const CIndex& tag, const string& text):
-		sheet(sheet), tag(tag), text(text), bCalculated(false)
-	{
-	}
-	CCell(CCell&& cell): sheet(sheet), tag(move(tag)), text(move(text))
-	{
-	}
+		sheet(sheet), tag(tag), text(text), bCalculated(false) {}
+	CCell(CCell&& cell): sheet(sheet), tag(move(tag)), text(move(text)) {}
 	string get_text() const
 	{
 		return disptext;
 	}
-	virtual void calculate()
-	{
-	}
-	virtual void calculate(set<CIndex>& refs)
-	{
-	}
+	virtual void calculate() {}
+	virtual void calculate(set<CIndex>& refs) {}
 	CCell* replace_with(CCell* cell)
 	{
 		sheet[tag] = cell;
@@ -168,22 +170,13 @@ public:
         {
             if (isalpha(subtext[0]))
             {
-                int x, y;
                 if (isnumber(subtext.substr(1)))
                 {
-                    if (subtext[0] >= 'A' && subtext[0] <= 'Z')
-                    {
-                        x = subtext[0] - 'A' + 1;
-                    } else {
-                        x = subtext[0] - 'a' + 1;
-                    }
-                    y = atoi(text.c_str());
+                    sheet[CIndex(x,y)] -> calculate(refs);
+                    replace_with(sheet[CIndex(x,y)]);
                 } else {
                     replace_with(new CCellError(move(*this), "#BADLINK"));
-                    return;
                 }
-                sheet[CIndex(x,y)] -> calculate(refs);
-                replace_with(sheet[CIndex(x,y)]);
                 return;
             } else if (isnumber(subtext)) {
                 // create CCellNumber and replace
@@ -191,13 +184,7 @@ public:
                 //
             }
         } else {
-            int bpos = 0;
-            do
-            {
-                string term = subtext.substr(bpos, fpos - bpos);
-                //
-                bpos = fpos + 1;
-            } while((fpos = subtext.find_first_of("+-*/", bpos)) != string::npos);
+
         }
 
 		bCalculated = true;
@@ -206,6 +193,10 @@ public:
 
 class CCellUndefined: public CCell
 {
+public:
+    CCellUndefined(CCell&& cell): CCell(move(cell))
+	{
+	}
 	bool try_replace(CCell* cell)
 	{
 		if (dynamic_cast<CCellError*>(sheet[tag]) == NULL)
@@ -270,34 +261,54 @@ int main(int argc, char* argv[])
         {
             for (int j = 0; j < m; ++j)
             {
-                // create and add CCellError
-                // ...
-                //
+                CIndex ind(i,j);
+                CCell cell(sheet, ind, "");
+                sheet.insert(move(pair<CIndex, CCell*>(CIndex(i,j), cell.replace_with(new CCellError(move(cell), "#NODATA")))));
             }
             continue;
         }
+        string subtext;
         int bfound = 0;
-        int efound = str.find_first_of("\t");
-        for (int j = 0; j < m-1; ++j)
+        int efound = 0;
+        for (int j = 0; j < m; ++j)
         {
+            CIndex ind(i, j);
             if (efound == string::npos)
             {
-                // create and add CCellError
-                // ...
-                //
+                CCell cell(sheet, ind, "");
+                sheet.insert(move(pair<CIndex, CCell*>(ind, cell.replace_with(new CCellError(move(cell), "#NODATA")))));
                 continue;
             }
-            string subtext = str.substr(bfound, efound - bfound);
-            // create and add CCellUndefined
-            // ...
-            //
-            bfound = efound + 1;
+
             efound = str.find_first_of("\t", bfound);
+            if (efound != string::npos)
+                subtext = str.substr(bfound, efound - bfound);
+            else
+                subtext = str.substr(bfound);
+
+            CCell cell(sheet, ind, subtext);
+            sheet.insert(move(pair<CIndex, CCell*>(ind, cell.replace_with(new CCellUndefined(move(cell))))));
+
+            if (efound != string::npos)
+                bfound = efound + 1;
         }
-        string subtext = str.substr(bfound);
-        // create and add CCellUndefined
-        // ...
-        //
     }
+
+
+    for (CSheet::iterator it = sheet.begin(); it != sheet.end(); ++it)
+    {
+        it->second->calculate();
+    }
+
+    for (int i = 0; i < n - 1; ++i)
+    {
+        for (int j = 0; j < m - 1; ++j)
+        {
+            cout << sheet[CIndex(i,j)] << '\t';
+        }
+        cout << sheet[CIndex(i,m - 1)] << '\n';
+    }
+    cout << sheet[CIndex(n - 1,m - 1)];
+
 	return 0;
 }
