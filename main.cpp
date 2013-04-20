@@ -7,7 +7,6 @@
  
 using namespace std;
 
-#define BUFFER_SIZE 65535
 #define INT_BUFFER 15
 
 bool isnumber(const string& str)
@@ -211,7 +210,7 @@ public:
 			return;
 		}
 	}
-	void calculate(set<CIndex>& refs);
+	bool calculate(set<CIndex>& refs);
 	void calculate()
 	{
 		if (!bCalculated)
@@ -263,14 +262,11 @@ public:
 	}
 };
 
-void CCellFormula::calculate(set<CIndex>& refs)
+bool CCellFormula::calculate(set<CIndex>& refs)
 {
 	CIndex ltag = tag;
 	if (refs.find(ltag) != refs.end())
-	{
-		replace_with(new CCellError(*this, "#RECURSIVELINKS"));
-		return;
-	}
+		return false;
 	refs.insert(ltag);
 
 	string celltext = text.substr(1);
@@ -295,7 +291,10 @@ void CCellFormula::calculate(set<CIndex>& refs)
 					if (cell) {
 						if (dynamic_cast<CCellFormula*>(cell))
 						{
-							dynamic_cast<CCellFormula*>(cell)->calculate(refs);
+							if (!dynamic_cast<CCellFormula*>(cell)->calculate(refs)) {
+								replace_with(new CCellError(*this, "#RECURSIVELINKS"));
+								goto error2;
+							}
 							cell = sheet[idx];
 						}
 						cell = cell->clone();
@@ -324,7 +323,10 @@ void CCellFormula::calculate(set<CIndex>& refs)
 					cell = sheet[idx];
 				}
 				if (cell && dynamic_cast<CCellFormula*>(cell)) {
-					dynamic_cast<CCellFormula*>(cell)->calculate(refs);
+					if (!dynamic_cast<CCellFormula*>(cell)->calculate(refs)) {
+						replace_with(new CCellError(*this, "#RECURSIVELINKS"));
+						goto error2;
+					}
 					cell = sheet[idx];
 				}
 				if (cell) {
@@ -380,7 +382,11 @@ void CCellFormula::calculate(set<CIndex>& refs)
 	bCalculated = true;
 	replace_with(new CCellNumber(*this, (int)result));
 error:
-	refs.erase(ltag);		
+	refs.erase(ltag);
+	return true;
+error2:
+	refs.erase(ltag);
+	return false;
 }
 
 
@@ -455,6 +461,11 @@ int main(int argc, char* argv[])
 				((j != m-1) ? '\t' : '\n');
 		}
 	}
+
+#ifdef _CONSOLE
+	// for Visual Studio only
+	system("pause");
+#endif
 
 	return 0;
 }
